@@ -414,7 +414,7 @@
                         img.onload = () => {
                             const elem = document.createElement('canvas');
                             // Limit max dimension to 800px for performance
-                            const maxDim = 1024; 
+                            const maxDim = 800; // REDUCED FROM 1024 TO 800
                             let width = img.width;
                             let height = img.height;
 
@@ -430,7 +430,8 @@
                             ctx.drawImage(img, 0, 0, width, height);
                             // Use JPEG for photos (smaller), PNG for Frames (transparency)
                             const isPng = file.type === 'image/png';
-                            const result = elem.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85);
+                            // Slightly reduced quality to ensure under 1MB limit
+                            const result = elem.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.8);
                             resolve(result);
                         };
                         img.onerror = reject;
@@ -464,6 +465,7 @@
         // 3. Publish Campaign
         document.getElementById('btn-publish').addEventListener('click', async () => {
             if (!isFirebaseActive) { alert("Cannot publish: Firebase configuration is missing."); return; }
+            if (!currentUser) { alert("You are not signed in. Check previous errors or refresh."); return; }
             
             const title = document.getElementById('campaign-title').value;
             const customSlug = document.getElementById('campaign-slug').value.trim();
@@ -506,7 +508,9 @@
                 console.error(e);
                 if(e.message === "InvalidSlug") alert("Custom Link can only use letters, numbers, and dashes.");
                 else if(e.message === "SlugTaken") alert("That Custom Link is already taken.");
-                else alert("Failed to create campaign. Please try again.");
+                else if(e.code === 'permission-denied') alert("Permission Error: Check your Firestore Database Rules. Ensure they are set to 'test mode' or allow writes to 'artifacts'.");
+                else if(e.code === 'resource-exhausted') alert("Image too large. Please try a smaller frame.");
+                else alert("Failed to create campaign: " + e.message);
             } finally {
                 showLoading(false);
             }
