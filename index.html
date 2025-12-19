@@ -84,7 +84,7 @@
         <!-- LOADING OVERLAY -->
         <div id="loading" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center hidden-section transition-opacity duration-300">
             <div class="loader w-12 h-12 border-4 border-t-primary-600 mb-4"></div>
-            <p class="text-slate-500 font-medium animate-pulse">Processing...</p>
+            <p class="text-slate-500 font-medium animate-pulse" id="loading-text">Processing...</p>
         </div>
 
         <!-- GLOBAL CONFIG WARNING -->
@@ -304,8 +304,10 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-twibbon-app';
 
         // --- UTILS: LOADER ---
-        const showLoading = (show) => {
+        const showLoading = (show, text) => {
             const el = document.getElementById('loading');
+            const txt = document.getElementById('loading-text');
+            if(text) txt.textContent = text;
             if (show) el.classList.remove('hidden-section');
             else el.classList.add('hidden-section');
         };
@@ -523,7 +525,26 @@
                 return; 
             }
 
-            showLoading(true);
+            showLoading(true, "Publishing...");
+
+            // --- SMART RETRY HELPER ---
+            const runWithRetry = async (fn) => {
+                let attempts = 0;
+                while (attempts < 3) {
+                    try {
+                        return await fn();
+                    } catch (e) {
+                        if (e.message.includes("offline") || e.code === 'unavailable') {
+                            attempts++;
+                            console.log(`Connection unstable. Retrying (${attempts}/3)...`);
+                            await new Promise(r => setTimeout(r, 1500));
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
+                throw new Error("Network unstable. Please check your connection.");
+            };
 
             try {
                 const campaignData = {
@@ -547,13 +568,16 @@
                     if (!slugRegex.test(customSlug)) throw new Error("InvalidSlug");
 
                     const slugRef = doc(db, 'artifacts', appId, 'public', 'data', 'campaigns', customSlug);
-                    const slugSnap = await getDoc(slugRef);
+                    // Retry GET
+                    const slugSnap = await runWithRetry(() => getDoc(slugRef));
                     if (slugSnap.exists()) throw new Error("SlugTaken");
 
-                    await setDoc(slugRef, campaignData);
+                    // Retry SET
+                    await runWithRetry(() => setDoc(slugRef, campaignData));
                     docRef = slugRef;
                 } else {
-                    docRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'campaigns'), campaignData);
+                    // Retry ADD
+                    docRef = await runWithRetry(() => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'campaigns'), campaignData));
                 }
 
                 currentCampaignId = docRef.id;
