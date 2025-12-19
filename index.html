@@ -55,16 +55,14 @@
         </div>
 
         <!-- GLOBAL CONFIG WARNING (Moved outside of views to be always visible if needed) -->
-        <div id="config-warning" class="hidden-section bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg text-sm mb-6 flex items-start gap-3 shadow-sm">
-            <i class="ph ph-warning-circle text-xl mt-0.5 text-yellow-600"></i>
+        <div id="config-warning" class="hidden-section bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg text-sm mb-6 flex items-start gap-3 shadow-sm">
+            <i class="ph ph-warning-circle text-xl mt-0.5 text-red-600"></i>
             <div>
-                <strong class="font-bold">Setup Required:</strong> Firebase configuration is missing.
-                <p class="mt-1 text-yellow-700">You are running in a deployed/local environment but haven't added your API keys yet.</p>
-                <ul class="list-disc list-inside mt-2 ml-1 text-yellow-700/80 font-mono text-xs">
-                    <li>Open <strong>index.html</strong> in your editor.</li>
-                    <li>Find <code>const manualConfig = null;</code>.</li>
-                    <li>Paste your Firebase config object there.</li>
-                </ul>
+                <strong class="font-bold" id="error-title">Setup Required:</strong>
+                <p class="mt-1" id="error-message">Firebase configuration is missing.</p>
+                <div id="error-instructions" class="mt-2 text-red-700/80 font-mono text-xs">
+                    <!-- Instructions injected via JS -->
+                </div>
             </div>
         </div>
 
@@ -231,15 +229,13 @@
         // ==========================================
         // CONFIGURATION FOR VERCEL / GITHUB PAGES
         // ==========================================
-        // Replace 'null' below with your actual Firebase config object 
-        // from Firebase Console -> Project Settings -> General -> Your Apps -> SDK setup and configuration.
         const manualConfig = {
-            apiKey: "AIzaSyDmPT73QHeykt_uTX_0eCe8jGdC2pWE53U",
-            authDomain: "twibbon-app-25541.firebaseapp.com",
-            projectId: "twibbon-app-25541",
-            storageBucket: "twibbon-app-25541.firebasestorage.app",
-            messagingSenderId: "48085731702",
-            appId: "1:48085731702:web:49525f008cc9ccefce5257"
+             apiKey: "AIzaSyDmPT73QHeykt_uTX_0eCe8jGdC2pWE53U",
+             authDomain: "twibbon-app-25541.firebaseapp.com",
+             projectId: "twibbon-app-25541",
+             storageBucket: "twibbon-app-25541.firebasestorage.app",
+             messagingSenderId: "48085731702",
+             appId: "1:48085731702:web:49525f008cc9ccefce5257"
         };
         
         // App ID for data namespacing (Optional, but good for separation)
@@ -290,7 +286,7 @@
                 }
                 
                 if (!firebaseConfig) {
-                    throw new Error("No Firebase Config found");
+                    throw new Error("MissingConfig");
                 }
 
                 app = initializeApp(firebaseConfig);
@@ -316,15 +312,50 @@
                 });
 
             } catch (e) {
-                console.warn("Firebase not initialized:", e);
+                console.warn("Firebase Init Error:", e);
+                
                 // Show Global Warning Banner
-                document.getElementById('config-warning').classList.remove('hidden-section');
+                const warningEl = document.getElementById('config-warning');
+                const titleEl = document.getElementById('error-title');
+                const msgEl = document.getElementById('error-message');
+                const instrEl = document.getElementById('error-instructions');
+                
+                warningEl.classList.remove('hidden-section');
+
+                // Customize Error Message
+                if (e.message === "MissingConfig") {
+                    titleEl.innerText = "Setup Required:";
+                    msgEl.innerText = "Firebase configuration is missing.";
+                    instrEl.innerHTML = `
+                        <li>Open index.html</li>
+                        <li>Paste your config into 'manualConfig'</li>
+                    `;
+                } else if (e.code === 'auth/unauthorized-domain') {
+                    titleEl.innerText = "Access Denied (Domain):";
+                    msgEl.innerText = "Firebase blocked this website domain.";
+                    instrEl.innerHTML = `
+                        <li>Go to Firebase Console > Authentication > Settings > Authorized Domains</li>
+                        <li>Add your Vercel domain (e.g. my-app.vercel.app)</li>
+                    `;
+                } else if (e.code === 'auth/operation-not-allowed' || e.code === 'auth/admin-restricted-operation') {
+                    titleEl.innerText = "Authentication Error:";
+                    msgEl.innerText = "Anonymous sign-in is disabled or restricted.";
+                    instrEl.innerHTML = `
+                        <li>Go to Firebase Console > Authentication > Sign-in method</li>
+                        <li>Ensure 'Anonymous' is Enabled</li>
+                        <li>Check Settings > User Actions > 'Enable create (sign-up)' is checked</li>
+                    `;
+                } else {
+                    titleEl.innerText = "Connection Error:";
+                    msgEl.innerText = e.message || "Unknown error occurred";
+                    instrEl.innerHTML = "<li>Check console for details</li>";
+                }
                 
                 // Disable Publish Button (UX Improvement)
                 const pubBtn = document.getElementById('btn-publish');
                 if(pubBtn) {
                     pubBtn.disabled = true;
-                    pubBtn.innerHTML = "<i class='ph ph-lock-key mr-2'></i> Setup Required (See Warning)";
+                    pubBtn.innerHTML = "<i class='ph ph-lock-key mr-2'></i> Check Error Above";
                     pubBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
                     pubBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-md');
                 }
