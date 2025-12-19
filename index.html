@@ -530,20 +530,24 @@
             // --- SMART RETRY HELPER ---
             const runWithRetry = async (fn) => {
                 let attempts = 0;
+                let lastError;
                 while (attempts < 3) {
                     try {
                         return await fn();
                     } catch (e) {
-                        if (e.message.includes("offline") || e.code === 'unavailable') {
+                        lastError = e;
+                        // Retry on specific network-like errors
+                        if (e.message.includes("offline") || e.code === 'unavailable' || e.code === 'network-request-failed') {
                             attempts++;
-                            console.log(`Connection unstable. Retrying (${attempts}/3)...`);
-                            await new Promise(r => setTimeout(r, 1500));
+                            console.warn(`Connection unstable (Attempt ${attempts}/3). Error:`, e.code);
+                            await new Promise(r => setTimeout(r, 2000)); // Increased wait time
                         } else {
-                            throw e;
+                            throw e; // Throw immediately if it's a permission/logic error
                         }
                     }
                 }
-                throw new Error("Network unstable. Please check your connection.");
+                // If we get here, retries failed.
+                throw new Error(`Connection Blocked. Please disable AdBlockers/VPN. (Code: ${lastError.code || 'unknown'})`);
             };
 
             try {
@@ -593,6 +597,8 @@
                     errorMsg = "Database Locked (Permission Denied).<br>Solution: Go to Firebase Console > Firestore > Rules. Change 'allow write: if false' to 'allow write: if true' (for test mode).";
                 } else if (e.code === 'auth/unauthorized-domain') {
                     errorMsg = "Domain Not Authorized.<br>Solution: Go to Firebase Console > Authentication > Settings > Authorized Domains. Add your website domain.";
+                } else if (e.message.includes("Connection Blocked")) {
+                    errorMsg = "Connection Blocked.<br>Please disable AdBlockers (uBlock, etc) or VPNs. They are blocking the database connection.";
                 } else if (e.message === "FrameTooBig") {
                     errorMsg = "Image Size Limit Exceeded.<br>The compressed frame is still >1MB. Please use a simpler PNG file.";
                 } else if (e.message === "InvalidSlug") {
