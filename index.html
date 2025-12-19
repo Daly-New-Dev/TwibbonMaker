@@ -3,209 +3,264 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Twibbonize Clone - Campaigns & Analytics</title>
+    <title>TwibbonMaker - Campaign Platform</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+                    }
+                }
+            }
+        }
+    </script>
     
-    <!-- Fabric.js -->
+    <!-- Fabric.js (Canvas) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
     <style>
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         .canvas-container {
             margin: 0 auto;
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
         .file-input { display: none; }
         .hidden-section { display: none !important; }
-        .loading-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.8); z-index: 50;
-            display: flex; justify-content: center; align-items: center;
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
         }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #4f46e5;
+            width: 24px;
+            height: 24px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col selection:bg-primary-100 selection:text-primary-700">
 
     <!-- Navbar -->
-    <nav class="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-40">
-        <div class="max-w-4xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href=window.location.pathname">
-                <i class="ph ph-intersect text-2xl text-blue-600"></i>
-                <span class="font-bold text-lg tracking-tight">TwibbonMaker</span>
-            </div>
-            <div class="flex gap-4 text-sm font-medium">
-                <button onclick="router.navigateTo('dashboard')" class="text-slate-600 hover:text-blue-600">My Campaigns</button>
-                <button onclick="router.navigateTo('create')" class="bg-blue-600 text-white px-3 py-1.5 rounded-full hover:bg-blue-700 transition">Create New</button>
+    <nav class="glass-nav border-b border-slate-200/60 sticky top-0 z-40 transition-all duration-300">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-2.5 cursor-pointer group" onclick="window.location.href=window.location.pathname">
+                    <div class="bg-primary-600 text-white p-1.5 rounded-lg group-hover:bg-primary-700 transition-colors shadow-sm">
+                        <i class="ph ph-intersect text-xl"></i>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight text-slate-900">TwibbonMaker</span>
+                </div>
+                <div class="flex gap-3 text-sm font-medium">
+                    <button onclick="router.navigateTo('dashboard')" class="px-4 py-2 text-slate-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all">My Campaigns</button>
+                    <button onclick="router.navigateTo('create')" class="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-all shadow-sm hover:shadow-md active:scale-95">Create New</button>
+                </div>
             </div>
         </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="flex-grow max-w-4xl mx-auto px-4 py-6 w-full">
+    <main class="flex-grow max-w-5xl mx-auto px-4 py-8 w-full">
         
-        <!-- LOADING SPINNER -->
-        <div id="loading" class="loading-overlay hidden-section">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <!-- LOADING OVERLAY -->
+        <div id="loading" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center hidden-section transition-opacity duration-300">
+            <div class="loader w-12 h-12 border-4 border-t-primary-600 mb-4"></div>
+            <p class="text-slate-500 font-medium animate-pulse">Processing...</p>
         </div>
 
-        <!-- GLOBAL CONFIG WARNING (Moved outside of views to be always visible if needed) -->
-        <div id="config-warning" class="hidden-section bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg text-sm mb-6 flex items-start gap-3 shadow-sm">
-            <i class="ph ph-warning-circle text-xl mt-0.5 text-red-600"></i>
+        <!-- GLOBAL CONFIG WARNING -->
+        <div id="config-warning" class="hidden-section max-w-3xl mx-auto bg-red-50 border border-red-200 text-red-900 p-4 rounded-xl text-sm mb-8 flex items-start gap-3 shadow-sm animate-fade-in-down">
+            <i class="ph ph-warning-circle text-xl mt-0.5 text-red-600 flex-shrink-0"></i>
             <div>
-                <strong class="font-bold" id="error-title">Setup Required:</strong>
-                <p class="mt-1" id="error-message">Firebase configuration is missing.</p>
-                <div id="error-instructions" class="mt-2 text-red-700/80 font-mono text-xs">
+                <strong class="font-bold block mb-1" id="error-title">Setup Required</strong>
+                <p class="text-red-800 mb-2" id="error-message">Firebase configuration is missing.</p>
+                <div id="error-instructions" class="text-red-700/90 font-mono text-xs bg-red-100/50 p-2 rounded border border-red-200">
                     <!-- Instructions injected via JS -->
                 </div>
             </div>
         </div>
 
-        <!-- VIEW: DASHBOARD (List of user's campaigns) -->
-        <div id="view-dashboard" class="hidden-section space-y-6">
-            <div class="flex justify-between items-end">
+        <!-- VIEW: DASHBOARD -->
+        <div id="view-dashboard" class="hidden-section space-y-8 animate-fade-in">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-slate-200 pb-6">
                 <div>
-                    <h1 class="text-3xl font-bold text-slate-900">Dashboard</h1>
-                    <p class="text-slate-500">Track your campaign performance</p>
+                    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Dashboard</h1>
+                    <p class="text-slate-500 mt-1">Manage and track your active campaigns.</p>
                 </div>
             </div>
             
-            <div id="campaign-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div id="campaign-list" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <!-- Campaign Cards Injected Here -->
             </div>
             
-            <div id="empty-state" class="text-center py-12 hidden-section">
-                <div class="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="ph ph-folder-dashed text-3xl text-slate-400"></i>
+            <div id="empty-state" class="hidden-section flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-dashed border-slate-300 text-center">
+                <div class="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mb-4">
+                    <i class="ph ph-folder-dashed text-4xl text-slate-400"></i>
                 </div>
-                <h3 class="text-lg font-medium text-slate-900">No campaigns yet</h3>
-                <p class="text-slate-500 mb-6">Create your first campaign to start tracking analytics.</p>
-                <button onclick="router.navigateTo('create')" class="text-blue-600 font-bold hover:underline">Create Now</button>
+                <h3 class="text-lg font-bold text-slate-900">No campaigns yet</h3>
+                <p class="text-slate-500 mb-6 max-w-xs mx-auto">Create your first campaign to start sharing frames and tracking analytics.</p>
+                <button onclick="router.navigateTo('create')" class="text-primary-600 font-semibold hover:text-primary-700 hover:underline">Create First Campaign &rarr;</button>
             </div>
         </div>
 
         <!-- VIEW: CREATE CAMPAIGN -->
-        <div id="view-create" class="hidden-section max-w-xl mx-auto">
-            <h1 class="text-2xl font-bold mb-6 text-center">Start a Campaign</h1>
+        <div id="view-create" class="hidden-section max-w-2xl mx-auto animate-fade-in">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">Create Campaign</h1>
+                <p class="text-slate-500">Upload a frame and share it with the world.</p>
+            </div>
             
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Campaign Title</label>
-                    <input type="text" id="campaign-title" placeholder="e.g., Save the Earth 2025" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Custom Link (Optional)</label>
-                    <div class="flex items-center gap-2">
-                        <span class="text-slate-400 text-sm bg-slate-50 border border-slate-300 px-3 py-2 rounded-lg font-mono">?campaign_id=</span>
-                        <input type="text" id="campaign-slug" placeholder="my-campaign-name" class="flex-grow px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-mono text-sm">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-6 md:p-8 space-y-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Campaign Title</label>
+                        <input type="text" id="campaign-title" placeholder="e.g., Save the Earth 2025" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all placeholder:text-slate-400">
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">Leave blank for auto-generated link. Use letters, numbers, and hyphens only.</p>
-                </div>
 
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Upload Frame</label>
-                    <p class="text-xs text-slate-500 mb-3">Transparent PNG required. Max 1MB.</p>
-                    <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition cursor-pointer relative">
-                        <input type="file" id="create-frame-upload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/png">
-                        <div id="frame-preview-area">
-                            <i class="ph ph-upload-simple text-4xl text-slate-300 mb-2"></i>
-                            <p class="text-sm text-slate-500 font-medium">Click to upload frame</p>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Custom Link <span class="text-slate-400 font-normal">(Optional)</span></label>
+                        <div class="flex items-center">
+                            <span class="text-slate-500 text-sm bg-slate-100 border border-r-0 border-slate-200 px-4 py-3 rounded-l-xl font-mono">?campaign_id=</span>
+                            <input type="text" id="campaign-slug" placeholder="my-custom-url" class="flex-grow px-4 py-3 bg-slate-50 border border-slate-200 rounded-r-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all font-mono text-sm placeholder:text-slate-400">
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1.5">Use letters, numbers, and hyphens only.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Upload Frame</label>
+                        <div class="group border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:bg-primary-50/50 hover:border-primary-400 transition-all cursor-pointer relative bg-slate-50">
+                            <input type="file" id="create-frame-upload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/png">
+                            <div id="frame-preview-area" class="transition-transform duration-300 group-hover:scale-[1.02]">
+                                <div class="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                                    <i class="ph ph-upload-simple text-3xl text-primary-500"></i>
+                                </div>
+                                <p class="text-sm font-medium text-slate-900">Click to upload frame</p>
+                                <p class="text-xs text-slate-500 mt-1">PNG with transparency (Max 1MB)</p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <button id="btn-publish" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    Publish Campaign
-                </button>
+                    <div class="pt-4">
+                        <button id="btn-publish" class="w-full py-3.5 bg-primary-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-primary-500/30 hover:bg-primary-700 hover:shadow-xl hover:shadow-primary-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]">
+                            Publish Campaign
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- VIEW: SUCCESS (After Creation) -->
-        <div id="view-success" class="hidden-section max-w-xl mx-auto text-center pt-10">
-            <div class="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <i class="ph ph-check text-4xl"></i>
+        <!-- VIEW: SUCCESS -->
+        <div id="view-success" class="hidden-section max-w-xl mx-auto text-center pt-8 animate-fade-in">
+            <div class="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm animate-bounce-short">
+                <i class="ph ph-check text-5xl"></i>
             </div>
-            <h2 class="text-3xl font-bold text-slate-900 mb-2">Campaign Live!</h2>
-            <p class="text-slate-500 mb-6">Share this link with your supporters.</p>
+            <h2 class="text-3xl font-bold text-slate-900 mb-3">Campaign Is Live!</h2>
+            <p class="text-slate-500 mb-8 max-w-sm mx-auto">Your campaign is ready. Share the link below with your supporters.</p>
 
-            <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-2 mb-6 shadow-sm">
-                <input type="text" id="share-link-input" readonly class="flex-grow bg-slate-50 border-none text-slate-600 text-sm p-2 rounded focus:ring-0 font-mono">
-                <button onclick="copyLink()" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 transition">Copy</button>
+            <div class="bg-white p-2 pr-3 rounded-2xl border border-slate-200 flex items-center gap-2 mb-8 shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex-grow bg-slate-50 rounded-xl px-4 py-3 border border-slate-100">
+                    <input type="text" id="share-link-input" readonly class="w-full bg-transparent border-none text-slate-600 text-sm focus:ring-0 font-mono text-center">
+                </div>
+                <button onclick="copyLink()" class="bg-slate-900 text-white px-5 py-3 rounded-xl text-sm font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20">Copy</button>
             </div>
 
             <!-- Social Share Buttons -->
-            <div class="flex justify-center gap-3 mb-8">
-                <a id="share-wa" target="_blank" class="w-10 h-10 bg-[#25D366] text-white rounded-full flex items-center justify-center hover:opacity-90 transition">
-                    <i class="ph ph-whatsapp-logo text-xl"></i>
+            <div class="flex justify-center gap-4 mb-10">
+                <a id="share-wa" target="_blank" class="w-12 h-12 bg-[#25D366] text-white rounded-full flex items-center justify-center hover:scale-110 hover:shadow-lg transition-all" title="Share on WhatsApp">
+                    <i class="ph ph-whatsapp-logo text-2xl"></i>
                 </a>
-                <a id="share-twitter" target="_blank" class="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:opacity-90 transition">
-                    <i class="ph ph-x-logo text-xl"></i>
+                <a id="share-twitter" target="_blank" class="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center hover:scale-110 hover:shadow-lg transition-all" title="Share on X">
+                    <i class="ph ph-x-logo text-2xl"></i>
                 </a>
-                <a id="share-fb" target="_blank" class="w-10 h-10 bg-[#1877F2] text-white rounded-full flex items-center justify-center hover:opacity-90 transition">
-                    <i class="ph ph-facebook-logo text-xl"></i>
+                <a id="share-fb" target="_blank" class="w-12 h-12 bg-[#1877F2] text-white rounded-full flex items-center justify-center hover:scale-110 hover:shadow-lg transition-all" title="Share on Facebook">
+                    <i class="ph ph-facebook-logo text-2xl"></i>
                 </a>
-                <a id="share-li" target="_blank" class="w-10 h-10 bg-[#0A66C2] text-white rounded-full flex items-center justify-center hover:opacity-90 transition">
-                    <i class="ph ph-linkedin-logo text-xl"></i>
+                <a id="share-li" target="_blank" class="w-12 h-12 bg-[#0A66C2] text-white rounded-full flex items-center justify-center hover:scale-110 hover:shadow-lg transition-all" title="Share on LinkedIn">
+                    <i class="ph ph-linkedin-logo text-2xl"></i>
                 </a>
             </div>
 
             <div class="flex gap-4 justify-center">
-                <button onclick="router.navigateTo('dashboard')" class="text-slate-600 font-medium hover:text-blue-600">Go to Dashboard</button>
-                <button onclick="viewMyCampaign()" class="bg-blue-600 text-white px-6 py-2 rounded-full font-bold hover:bg-blue-700 transition">View Campaign</button>
+                <button onclick="router.navigateTo('dashboard')" class="text-slate-600 font-medium hover:text-primary-600 px-4 py-2">Go to Dashboard</button>
+                <button onclick="viewMyCampaign()" class="bg-white border border-slate-300 text-slate-700 px-6 py-2.5 rounded-full font-bold hover:bg-slate-50 transition-colors">View Campaign</button>
             </div>
         </div>
 
         <!-- VIEW: SUPPORTER (The Editor) -->
-        <div id="view-supporter" class="hidden-section max-w-xl mx-auto">
-            <div class="text-center mb-6">
-                <span class="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Campaign</span>
-                <h1 id="display-campaign-title" class="text-2xl font-bold mt-2">Loading...</h1>
-                <p id="display-usage-count" class="text-sm text-slate-500 mt-1 flex items-center justify-center gap-1">
-                    <i class="ph ph-users"></i> <span id="count-value">0</span> supporters
-                </p>
-            </div>
-
-            <!-- Editor Card -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6">
-                
-                <!-- Canvas Wrapper -->
-                <div class="flex justify-center mb-6 bg-slate-100 rounded-lg p-1 border border-dashed border-slate-300">
-                    <canvas id="c" width="500" height="500"></canvas>
+        <div id="view-supporter" class="hidden-section max-w-5xl mx-auto animate-fade-in">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- Left Column: Preview -->
+                <div class="lg:col-span-7 xl:col-span-8 flex justify-center bg-slate-100/50 rounded-2xl p-4 md:p-8 border border-slate-200">
+                     <div class="relative shadow-2xl shadow-slate-200 rounded-lg overflow-hidden bg-white">
+                        <canvas id="c" width="500" height="500" class="max-w-full h-auto"></canvas>
+                     </div>
                 </div>
 
-                <!-- Controls -->
-                <div class="space-y-4">
-                    <!-- Only Photo Upload Needed (Frame is pre-loaded) -->
-                    <div class="p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm"><i class="ph ph-camera"></i></div>
-                            <div>
-                                <p class="font-semibold text-sm">Upload Your Photo</p>
+                <!-- Right Column: Controls -->
+                <div class="lg:col-span-5 xl:col-span-4 space-y-6">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <span class="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide mb-3">
+                            <i class="ph ph-star-fill"></i> Campaign
+                        </span>
+                        <h1 id="display-campaign-title" class="text-2xl font-bold text-slate-900 leading-tight mb-2">Loading...</h1>
+                        <p class="text-sm text-slate-500 flex items-center gap-1.5">
+                            <i class="ph ph-users text-lg"></i>
+                            <span id="count-value" class="font-bold text-slate-700">0</span> supporters
+                        </p>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                        <!-- Upload Section -->
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-3">1. Choose Photo</label>
+                            <label class="flex items-center gap-4 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 hover:border-primary-300 transition-all group">
+                                <div class="w-12 h-12 bg-primary-50 text-primary-600 rounded-full flex items-center justify-center group-hover:bg-primary-600 group-hover:text-white transition-colors">
+                                    <i class="ph ph-camera text-2xl"></i>
+                                </div>
+                                <div class="flex-grow">
+                                    <span class="block font-medium text-slate-900">Upload Image</span>
+                                    <span class="text-xs text-slate-500">Supports JPG, PNG</span>
+                                </div>
+                                <input type="file" id="upload-photo" class="file-input" accept="image/*">
+                            </label>
+                        </div>
+
+                        <!-- Adjustments Section -->
+                        <div id="controls-panel" class="hidden transition-all duration-300">
+                            <label class="block text-sm font-semibold text-slate-700 mb-3">2. Adjust & Zoom</label>
+                            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <div class="flex items-center gap-4">
+                                    <button class="text-slate-400 hover:text-slate-600" onclick="adjustZoom(-0.1)"><i class="ph ph-minus-circle text-2xl"></i></button>
+                                    <input type="range" id="zoom-slider" min="0.1" max="3" step="0.05" value="1" class="flex-grow h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
+                                    <button class="text-slate-400 hover:text-slate-600" onclick="adjustZoom(0.1)"><i class="ph ph-plus-circle text-2xl"></i></button>
+                                </div>
+                                <p class="text-xs text-center text-slate-400 mt-2">Drag photo on canvas to move</p>
                             </div>
                         </div>
-                        <label class="cursor-pointer bg-white text-blue-600 px-4 py-2 rounded-md border border-blue-200 text-sm font-medium hover:bg-blue-50 transition shadow-sm">
-                            Choose
-                            <input type="file" id="upload-photo" class="file-input" accept="image/*">
-                        </label>
                     </div>
 
-                    <!-- Adjustments -->
-                    <div id="controls-panel" class="hidden space-y-4 pt-2 border-t border-slate-100">
-                        <div class="flex items-center gap-3">
-                            <i class="ph ph-minus text-slate-400"></i>
-                            <input type="range" id="zoom-slider" min="0.1" max="3" step="0.05" value="1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
-                            <i class="ph ph-plus text-slate-400"></i>
-                        </div>
-                    </div>
-
-                    <button id="btn-download" disabled class="w-full py-3 bg-slate-300 text-slate-500 rounded-xl font-bold text-lg shadow-sm transition-all duration-300 flex items-center justify-center gap-2 cursor-not-allowed">
-                        <i class="ph ph-download-simple"></i> Download & Support
+                    <button id="btn-download" disabled class="w-full py-4 bg-slate-100 text-slate-400 rounded-xl font-bold text-lg shadow-none transition-all duration-300 flex items-center justify-center gap-2 cursor-not-allowed border border-slate-200">
+                        <span>Select Photo First</span>
                     </button>
                 </div>
             </div>
@@ -217,7 +272,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // Added setDoc to imports
         import { getFirestore, collection, addDoc, setDoc, getDoc, getDocs, doc, updateDoc, increment, query, where, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GLOBAL VARIABLES & CONFIG ---
@@ -238,22 +292,26 @@
              appId: "1:48085731702:web:49525f008cc9ccefce5257"
         };
         
-        // App ID for data namespacing (Optional, but good for separation)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-twibbon-app';
 
-        // --- ROUTING LOGIC (Must be available immediately) ---
+        // --- UTILS: LOADER ---
+        const showLoading = (show) => {
+            const el = document.getElementById('loading');
+            if (show) el.classList.remove('hidden-section');
+            else el.classList.add('hidden-section');
+        };
+
+        // --- ROUTING LOGIC ---
         window.router = {
             navigateTo: (viewName) => {
-                // Hide all views
+                window.scrollTo(0,0);
                 ['view-dashboard', 'view-create', 'view-success', 'view-supporter'].forEach(id => {
                     document.getElementById(id).classList.add('hidden-section');
                 });
                 
-                // Show requested view
                 const view = document.getElementById('view-' + viewName);
                 if (view) view.classList.remove('hidden-section');
 
-                // Specific logic per view
                 if (viewName === 'dashboard') loadDashboard();
             }
         };
@@ -263,10 +321,8 @@
             const campaignId = urlParams.get('campaign_id');
 
             if (campaignId) {
-                // SUPPORTER MODE
                 loadCampaign(campaignId);
             } else {
-                // CREATOR MODE (Default to Dashboard)
                 router.navigateTo('dashboard');
             }
         }
@@ -275,32 +331,19 @@
         const initFirebase = async () => {
             try {
                 let firebaseConfig;
+                if (typeof __firebase_config !== 'undefined') firebaseConfig = JSON.parse(__firebase_config);
+                else if (manualConfig) firebaseConfig = manualConfig;
                 
-                // 1. Try environment config (Gemini Canvas)
-                if (typeof __firebase_config !== 'undefined') {
-                    firebaseConfig = JSON.parse(__firebase_config);
-                } 
-                // 2. Try manual config (Vercel/GitHub/Local)
-                else if (manualConfig) {
-                    firebaseConfig = manualConfig;
-                }
-                
-                if (!firebaseConfig) {
-                    throw new Error("MissingConfig");
-                }
+                if (!firebaseConfig) throw new Error("MissingConfig");
 
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
                 isFirebaseActive = true;
 
-                // Auth Logic
-                // If in Canvas with token
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
-                } 
-                // If on Vercel/GitHub (no token) -> Anonymous Auth
-                else {
+                } else {
                     await signInAnonymously(auth);
                 }
 
@@ -313,8 +356,6 @@
 
             } catch (e) {
                 console.warn("Firebase Init Error:", e);
-                
-                // Show Global Warning Banner
                 const warningEl = document.getElementById('config-warning');
                 const titleEl = document.getElementById('error-title');
                 const msgEl = document.getElementById('error-message');
@@ -322,84 +363,84 @@
                 
                 warningEl.classList.remove('hidden-section');
 
-                // Customize Error Message
                 if (e.message === "MissingConfig") {
                     titleEl.innerText = "Setup Required:";
                     msgEl.innerText = "Firebase configuration is missing.";
-                    instrEl.innerHTML = `
-                        <li>Open index.html</li>
-                        <li>Paste your config into 'manualConfig'</li>
-                    `;
+                    instrEl.innerHTML = `<li>Open index.html</li><li>Paste your config into 'manualConfig'</li>`;
                 } else if (e.code === 'auth/unauthorized-domain') {
                     titleEl.innerText = "Access Denied (Domain):";
                     msgEl.innerText = "Firebase blocked this website domain.";
-                    instrEl.innerHTML = `
-                        <li>Go to Firebase Console > Authentication > Settings > Authorized Domains</li>
-                        <li>Add your Vercel domain (e.g. my-app.vercel.app)</li>
-                    `;
-                } else if (e.code === 'auth/operation-not-allowed' || e.code === 'auth/admin-restricted-operation') {
-                    titleEl.innerText = "Authentication Error:";
-                    msgEl.innerText = "Anonymous sign-in is disabled or restricted.";
-                    instrEl.innerHTML = `
-                        <li>Go to Firebase Console > Authentication > Sign-in method</li>
-                        <li>Ensure 'Anonymous' is Enabled</li>
-                        <li>Check Settings > User Actions > 'Enable create (sign-up)' is checked</li>
-                    `;
+                    instrEl.innerHTML = `<li>Go to Firebase Console > Authentication > Settings > Authorized Domains</li><li>Add your Vercel domain</li>`;
                 } else {
                     titleEl.innerText = "Connection Error:";
                     msgEl.innerText = e.message || "Unknown error occurred";
                     instrEl.innerHTML = "<li>Check console for details</li>";
                 }
                 
-                // Disable Publish Button (UX Improvement)
                 const pubBtn = document.getElementById('btn-publish');
                 if(pubBtn) {
                     pubBtn.disabled = true;
                     pubBtn.innerHTML = "<i class='ph ph-lock-key mr-2'></i> Check Error Above";
                     pubBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
-                    pubBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-md');
+                    pubBtn.classList.remove('bg-primary-600', 'hover:bg-primary-700', 'shadow-md');
                 }
-
-                handleRouting(); // Allow routing anyway, but data won't load
+                handleRouting();
             }
         };
 
-        // Initialize!
         initFirebase();
 
         // --- FABRIC JS SETUP ---
         const canvas = new fabric.Canvas('c', {
-            backgroundColor: '#f1f5f9',
+            backgroundColor: '#f8fafc', // slate-50
             preserveObjectStacking: true,
-            selection: false
+            selection: false,
+            renderOnAddRemove: false // Opt-in performance
         });
         let userPhoto = null;
         let frameOverlay = null;
 
-        // --- CREATOR LOGIC ---
-        
-        // 1. Image Compression (Client-Side)
-        const compressImage = (file) => {
+        // --- PERFORMANCE: OPTIMIZED IMAGE COMPRESSION ---
+        // Using Promise + setTimeout to ensure UI doesn't freeze before loader appears
+        const compressImage = async (file) => {
+            showLoading(true);
             return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.src = event.target.result;
-                    img.onload = () => {
-                        const elem = document.createElement('canvas');
-                        const scaleFactor = 800 / Math.max(img.width, img.height);
-                        elem.width = img.width * Math.min(1, scaleFactor);
-                        elem.height = img.height * Math.min(1, scaleFactor);
-                        const ctx = elem.getContext('2d');
-                        ctx.drawImage(img, 0, 0, elem.width, elem.height);
-                        resolve(elem.toDataURL('image/png', 0.8));
+                setTimeout(() => { // Small delay to allow DOM to render loader
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.src = event.target.result;
+                        img.onload = () => {
+                            const elem = document.createElement('canvas');
+                            // Limit max dimension to 800px for performance
+                            const maxDim = 1024; 
+                            let width = img.width;
+                            let height = img.height;
+
+                            if (width > height) {
+                                if (width > maxDim) { height *= maxDim / width; width = maxDim; }
+                            } else {
+                                if (height > maxDim) { width *= maxDim / height; height = maxDim; }
+                            }
+
+                            elem.width = width;
+                            elem.height = height;
+                            const ctx = elem.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            // Use JPEG for photos (smaller), PNG for Frames (transparency)
+                            const isPng = file.type === 'image/png';
+                            const result = elem.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85);
+                            resolve(result);
+                        };
+                        img.onerror = reject;
                     };
-                };
+                    reader.onerror = reject;
+                }, 50);
             });
         };
 
-        // 2. Handle Frame Select for Preview
+        // 2. Handle Frame Select
         let pendingFrameBase64 = null;
         const frameUploadInput = document.getElementById('create-frame-upload');
         if(frameUploadInput) {
@@ -407,37 +448,31 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
-                document.getElementById('loading').classList.remove('hidden-section');
                 try {
                     pendingFrameBase64 = await compressImage(file);
                     const previewArea = document.getElementById('frame-preview-area');
-                    previewArea.innerHTML = `<img src="${pendingFrameBase64}" class="h-32 mx-auto object-contain border rounded bg-slate-100">`;
+                    previewArea.innerHTML = `<img src="${pendingFrameBase64}" class="h-32 mx-auto object-contain border rounded-lg bg-slate-100 shadow-sm">
+                                             <p class="text-sm font-bold text-green-600 mt-2">Frame Loaded!</p>`;
                 } catch(err) {
-                    alert("Error processing image");
+                    alert("Error processing image. Try a smaller file.");
+                } finally {
+                    showLoading(false);
                 }
-                document.getElementById('loading').classList.add('hidden-section');
             });
         }
 
         // 3. Publish Campaign
         document.getElementById('btn-publish').addEventListener('click', async () => {
-            if (!isFirebaseActive) {
-                alert("Cannot publish: Firebase configuration is missing.");
-                return;
-            }
+            if (!isFirebaseActive) { alert("Cannot publish: Firebase configuration is missing."); return; }
             
             const title = document.getElementById('campaign-title').value;
             const customSlug = document.getElementById('campaign-slug').value.trim();
 
-            if (!title || !pendingFrameBase64) {
-                alert("Please add a title and a frame.");
-                return;
-            }
+            if (!title || !pendingFrameBase64) { alert("Please add a title and a frame."); return; }
 
-            document.getElementById('loading').classList.remove('hidden-section');
+            showLoading(true);
 
             try {
-                // Prepare Data
                 const campaignData = {
                     title: title,
                     frameBase64: pendingFrameBase64,
@@ -448,54 +483,39 @@
 
                 let docRef;
 
-                // LOGIC: Use Custom Slug if provided
                 if (customSlug) {
-                    // Validate Slug (alphanumeric and dashes only)
                     const slugRegex = /^[a-zA-Z0-9-]+$/;
-                    if (!slugRegex.test(customSlug)) {
-                        alert("Custom Link can only contain letters, numbers, and hyphens.");
-                        document.getElementById('loading').classList.add('hidden-section');
-                        return;
-                    }
+                    if (!slugRegex.test(customSlug)) throw new Error("InvalidSlug");
 
-                    // Check availability
                     const slugRef = doc(db, 'artifacts', appId, 'public', 'data', 'campaigns', customSlug);
                     const slugSnap = await getDoc(slugRef);
-                    if (slugSnap.exists()) {
-                        alert("This Custom Link is already taken. Please choose another.");
-                        document.getElementById('loading').classList.add('hidden-section');
-                        return;
-                    }
+                    if (slugSnap.exists()) throw new Error("SlugTaken");
 
-                    // Set Doc with specific ID
                     await setDoc(slugRef, campaignData);
-                    docRef = slugRef; // ID is the slug
+                    docRef = slugRef;
                 } else {
-                    // Auto-generated ID
                     docRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'campaigns'), campaignData);
                 }
 
-                // Generate Link
                 currentCampaignId = docRef.id;
                 const shareUrl = `${window.location.origin}${window.location.pathname}?campaign_id=${docRef.id}`;
                 document.getElementById('share-link-input').value = shareUrl;
-                
-                // Update Social Links
                 updateSocialLinks(shareUrl, title);
-
                 router.navigateTo('success');
             } catch (e) {
-                console.error("Error adding document: ", e);
-                alert("Failed to create campaign. Please try again.");
+                console.error(e);
+                if(e.message === "InvalidSlug") alert("Custom Link can only use letters, numbers, and dashes.");
+                else if(e.message === "SlugTaken") alert("That Custom Link is already taken.");
+                else alert("Failed to create campaign. Please try again.");
+            } finally {
+                showLoading(false);
             }
-            document.getElementById('loading').classList.add('hidden-section');
         });
 
         // Helper to update social buttons
         function updateSocialLinks(url, title) {
             const encodedUrl = encodeURIComponent(url);
             const encodedTitle = encodeURIComponent("Support this campaign: " + title);
-
             document.getElementById('share-wa').href = `https://wa.me/?text=${encodedTitle}%20${encodedUrl}`;
             document.getElementById('share-twitter').href = `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`;
             document.getElementById('share-fb').href = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
@@ -504,10 +524,9 @@
 
         // --- DASHBOARD LOGIC ---
         async function loadDashboard() {
-            if (!isFirebaseActive) return; // Silent return if config missing
-            if (!currentUser) return;
+            if (!isFirebaseActive || !currentUser) return;
             
-            document.getElementById('loading').classList.remove('hidden-section');
+            showLoading(true);
             const listEl = document.getElementById('campaign-list');
             listEl.innerHTML = ''; 
 
@@ -526,40 +545,43 @@
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
                         const card = document.createElement('div');
-                        card.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer";
-                        card.onclick = () => {
-                             window.location.href = `${window.location.pathname}?campaign_id=${doc.id}`;
-                        };
+                        card.className = "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg transition-all cursor-pointer group";
+                        card.onclick = () => window.location.href = `${window.location.pathname}?campaign_id=${doc.id}`;
+                        
                         card.innerHTML = `
-                            <div class="flex items-center gap-4">
-                                <img src="${data.frameBase64}" class="w-16 h-16 rounded bg-slate-100 object-contain">
-                                <div>
-                                    <h3 class="font-bold text-slate-800 line-clamp-1">${data.title}</h3>
-                                    <p class="text-sm text-slate-500 mt-1 mb-1 font-mono text-xs bg-slate-100 inline-block px-1 rounded">/${doc.id}</p>
-                                    <p class="text-sm text-slate-500">
-                                        <i class="ph ph-users-three mr-1"></i> 
-                                        <span class="font-bold text-blue-600">${data.usageCount || 0}</span> supporters
-                                    </p>
+                            <div class="flex items-start gap-4">
+                                <div class="bg-slate-100 rounded-lg p-2 flex-shrink-0">
+                                    <img src="${data.frameBase64}" class="w-16 h-16 object-contain">
                                 </div>
+                                <div class="flex-grow min-w-0">
+                                    <h3 class="font-bold text-slate-900 truncate group-hover:text-primary-600 transition-colors">${data.title}</h3>
+                                    <p class="text-xs font-mono text-slate-400 mt-1 mb-2 truncate">/${doc.id}</p>
+                                    <div class="flex items-center text-sm text-slate-500 bg-slate-50 rounded-md px-2 py-1 inline-flex">
+                                        <i class="ph ph-users mr-1.5"></i> 
+                                        <span class="font-bold text-slate-700">${data.usageCount || 0}</span>
+                                    </div>
+                                </div>
+                                <i class="ph ph-caret-right text-slate-300 group-hover:text-primary-400 transition-colors"></i>
                             </div>
                         `;
                         listEl.appendChild(card);
                     });
                 }
             } catch (e) {
-                console.error("Error loading dashboard", e);
+                console.error("Dashboard Error", e);
+            } finally {
+                showLoading(false);
             }
-            document.getElementById('loading').classList.add('hidden-section');
         }
 
         // --- SUPPORTER LOGIC ---
         async function loadCampaign(campaignId) {
             currentCampaignId = campaignId;
-            document.getElementById('loading').classList.remove('hidden-section');
+            showLoading(true);
             
             if (!isFirebaseActive) {
                 alert("Cannot load campaign: Firebase not configured.");
-                document.getElementById('loading').classList.add('hidden-section');
+                showLoading(false);
                 return;
             }
             
@@ -573,17 +595,23 @@
                     document.getElementById('display-campaign-title').textContent = data.title;
                     document.getElementById('count-value').textContent = data.usageCount || 0;
                     
+                    // Optimistic rendering for Fabric
                     fabric.Image.fromURL(data.frameBase64, (img) => {
                         canvas.clear();
-                        canvas.setBackgroundColor('#f1f5f9', canvas.renderAll.bind(canvas));
+                        canvas.setBackgroundColor('#f8fafc', () => {}); // No render yet
+                        
                         const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
                         img.scale(scale);
+                        
                         canvas.setOverlayImage(img, canvas.renderAll.bind(canvas), {
                             scaleX: canvas.width / img.width,
                             scaleY: canvas.height / img.height,
                             originX: 'left',
-                            originY: 'top'
+                            originY: 'top',
+                            selectable: false,
+                            evented: false // Important: Clicks pass through overlay
                         });
+                        canvas.renderAll();
                     });
 
                     router.navigateTo('supporter');
@@ -592,27 +620,35 @@
                     router.navigateTo('dashboard');
                 }
             } catch (e) {
-                console.error("Error fetching campaign:", e);
+                console.error("Campaign fetch error:", e);
                 alert("Could not load campaign.");
+            } finally {
+                showLoading(false);
             }
-            document.getElementById('loading').classList.add('hidden-section');
         }
 
-        // --- EDITOR & DOWNLOAD LOGIC (Supporter) ---
+        // --- EDITOR & DOWNLOAD LOGIC ---
         const controlsPanel = document.getElementById('controls-panel');
         const downloadBtn = document.getElementById('btn-download');
         const zoomSlider = document.getElementById('zoom-slider');
 
-        document.getElementById('upload-photo').addEventListener('change', function(e) {
+        // External zoom control
+        window.adjustZoom = (delta) => {
+            const newVal = parseFloat(zoomSlider.value) + delta;
+            zoomSlider.value = newVal;
+            zoomSlider.dispatchEvent(new Event('input'));
+        };
+
+        document.getElementById('upload-photo').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = function(f) {
-                const data = f.target.result;
+            try {
+                const compressedData = await compressImage(file);
+                
                 if (userPhoto) canvas.remove(userPhoto);
 
-                fabric.Image.fromURL(data, function(img) {
+                fabric.Image.fromURL(compressedData, function(img) {
                     userPhoto = img;
                     const scale = Math.max(canvas.width / img.width, canvas.height / img.height) * 0.8;
                     userPhoto.scale(scale);
@@ -623,47 +659,64 @@
                     
                     controlsPanel.classList.remove('hidden');
                     downloadBtn.disabled = false;
-                    downloadBtn.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-                    downloadBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'shadow-lg');
+                    downloadBtn.innerHTML = `<i class="ph ph-download-simple text-xl"></i> Download Result`;
+                    downloadBtn.classList.remove('bg-slate-100', 'text-slate-400', 'cursor-not-allowed', 'border-slate-200');
+                    downloadBtn.classList.add('bg-primary-600', 'text-white', 'hover:bg-primary-700', 'shadow-lg', 'shadow-primary-500/30', 'border-transparent');
                     
                     zoomSlider.value = scale;
                     zoomSlider.min = scale * 0.1;
                     zoomSlider.max = scale * 3;
+                    canvas.renderAll();
+                    showLoading(false);
                 });
-            };
-            reader.readAsDataURL(file);
+            } catch (err) {
+                console.error(err);
+                showLoading(false);
+            }
         });
 
+        // Debounced Slider
+        let rafId;
         zoomSlider.addEventListener('input', function() {
             if (userPhoto) {
-                userPhoto.scale(parseFloat(this.value));
-                canvas.requestRenderAll();
+                const val = parseFloat(this.value);
+                // Use RequestAnimationFrame for smooth 60fps scaling without blocking
+                if (rafId) cancelAnimationFrame(rafId);
+                rafId = requestAnimationFrame(() => {
+                    userPhoto.scale(val);
+                    canvas.requestRenderAll();
+                });
             }
         });
 
         downloadBtn.addEventListener('click', async function() {
-            canvas.discardActiveObject();
-            canvas.renderAll();
-            const dataURL = canvas.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
-            const link = document.createElement('a');
-            link.download = `support-${currentCampaignId || 'twibbon'}.png`;
-            link.href = dataURL;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            if (isFirebaseActive && currentCampaignId) {
+            showLoading(true);
+            // Small timeout to allow loader to render before heavy canvas export
+            setTimeout(async () => {
                 try {
-                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'campaigns', currentCampaignId);
-                    await updateDoc(docRef, {
-                        usageCount: increment(1)
-                    });
-                    const countEl = document.getElementById('count-value');
-                    countEl.innerText = parseInt(countEl.innerText) + 1;
-                } catch (e) {
-                    console.error("Error updating analytics", e);
+                    canvas.discardActiveObject();
+                    canvas.renderAll();
+                    
+                    const dataURL = canvas.toDataURL({ format: 'png', quality: 0.9, multiplier: 2 });
+                    const link = document.createElement('a');
+                    link.download = `support-${currentCampaignId || 'twibbon'}.png`;
+                    link.href = dataURL;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    if (isFirebaseActive && currentCampaignId) {
+                         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'campaigns', currentCampaignId);
+                         updateDoc(docRef, { usageCount: increment(1) }); // Fire and forget
+                         const countEl = document.getElementById('count-value');
+                         countEl.innerText = parseInt(countEl.innerText) + 1;
+                    }
+                } catch(e) {
+                    console.error("Download error", e);
+                } finally {
+                    showLoading(false);
                 }
-            }
+            }, 50);
         });
 
         // --- UTILS ---
@@ -671,7 +724,15 @@
             const copyText = document.getElementById("share-link-input");
             copyText.select();
             document.execCommand("copy");
-            alert("Link copied!");
+            // Toast notification could go here
+            const btn = document.querySelector('button[onclick="copyLink()"]');
+            const originalText = btn.innerText;
+            btn.innerText = "Copied!";
+            btn.classList.add('bg-green-600');
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.remove('bg-green-600');
+            }, 2000);
         };
 
         window.viewMyCampaign = () => {
