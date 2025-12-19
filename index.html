@@ -131,6 +131,15 @@
             
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-6 md:p-8 space-y-6">
+                    <!-- Error Log Container for Create View -->
+                    <div id="create-error-log" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800 flex items-start gap-3">
+                        <i class="ph ph-warning-circle text-lg mt-0.5 shrink-0"></i>
+                        <div>
+                            <strong class="font-bold">Creation Failed:</strong>
+                            <p id="create-error-msg" class="mt-1"></p>
+                        </div>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-semibold text-slate-700 mb-2">Campaign Title</label>
                         <input type="text" id="campaign-title" placeholder="e.g., Save the Earth 2025" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all placeholder:text-slate-400">
@@ -312,6 +321,10 @@
                 const view = document.getElementById('view-' + viewName);
                 if (view) view.classList.remove('hidden-section');
 
+                // Clear previous errors when switching views
+                const errDiv = document.getElementById('create-error-log');
+                if(errDiv) errDiv.classList.add('hidden');
+
                 if (viewName === 'dashboard') loadDashboard();
             }
         };
@@ -486,12 +499,18 @@
                 return; 
             }
             
+            // Clear previous errors
+            const errDiv = document.getElementById('create-error-log');
+            errDiv.classList.add('hidden');
+
             // Auto-login retry if needed
             if (!currentUser) {
                 try {
                     await signInAnonymously(auth);
                 } catch(e) {
-                    alert("Authentication failed. Please refresh the page.");
+                    const errMsg = document.getElementById('create-error-msg');
+                    errMsg.innerHTML = "Auth Failed: " + e.message;
+                    errDiv.classList.remove('hidden');
                     return;
                 }
             }
@@ -544,11 +563,25 @@
                 router.navigateTo('success');
             } catch (e) {
                 console.error("Publish Error:", e);
-                if(e.message === "InvalidSlug") alert("Custom Link can only use letters, numbers, and dashes.");
-                else if(e.message === "SlugTaken") alert("That Custom Link is already taken. Please choose another.");
-                else if(e.message === "FrameTooBig") alert("The frame image is still too complex. Please try a simpler PNG.");
-                else if(e.code === 'permission-denied') alert("Permission Error: Your database is blocking writes. Go to Firebase Console > Firestore > Rules, and ensure 'allow write: if true;' is set for testing.");
-                else alert("Failed to create campaign: " + e.message);
+                let errorMsg = "Failed to create campaign.";
+                
+                if(e.code === 'permission-denied') {
+                    errorMsg = "Database Locked (Permission Denied).<br>Solution: Go to Firebase Console > Firestore > Rules. Change 'allow write: if false' to 'allow write: if true' (for test mode).";
+                } else if (e.code === 'auth/unauthorized-domain') {
+                    errorMsg = "Domain Not Authorized.<br>Solution: Go to Firebase Console > Authentication > Settings > Authorized Domains. Add your website domain.";
+                } else if (e.message === "FrameTooBig") {
+                    errorMsg = "Image Size Limit Exceeded.<br>The compressed frame is still >1MB. Please use a simpler PNG file.";
+                } else if (e.message === "InvalidSlug") {
+                    errorMsg = "Invalid Custom Link.<br>Use only letters, numbers, and dashes.";
+                } else if (e.message === "SlugTaken") {
+                    errorMsg = "Custom Link Taken.<br>That link is already in use.";
+                } else {
+                    errorMsg = "Error: " + e.message;
+                }
+                
+                const errMsg = document.getElementById('create-error-msg');
+                errMsg.innerHTML = errorMsg;
+                errDiv.classList.remove('hidden');
             } finally {
                 showLoading(false);
             }
