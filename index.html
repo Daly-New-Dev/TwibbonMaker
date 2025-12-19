@@ -413,8 +413,10 @@
                         img.src = event.target.result;
                         img.onload = () => {
                             const elem = document.createElement('canvas');
-                            // Limit max dimension to 800px for performance
-                            const maxDim = 800; // REDUCED FROM 1024 TO 800
+                            const ctx = elem.getContext('2d');
+                            
+                            // 1. Initial aggressive resize (max 800px)
+                            const maxDim = 800; 
                             let width = img.width;
                             let height = img.height;
 
@@ -426,13 +428,27 @@
 
                             elem.width = width;
                             elem.height = height;
-                            const ctx = elem.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-                            // Use JPEG for photos (smaller), PNG for Frames (transparency)
-                            const isPng = file.type === 'image/png';
-                            // Slightly reduced quality to ensure under 1MB limit
-                            const result = elem.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.8);
-                            resolve(result);
+                            
+                            // 2. Iterative Compression Loop
+                            // Firestore limit is ~1MB. Base64 adds 33% overhead.
+                            // We target ~950KB string length to be safe.
+                            const MAX_STRING_LENGTH = 950000;
+                            let quality = 0.8;
+                            let dataUrl = elem.toDataURL(file.type, quality);
+                            
+                            // Loop: reduce dimensions until it fits
+                            while (dataUrl.length > MAX_STRING_LENGTH && (width > 200 && height > 200)) {
+                                width *= 0.85; // Reduce by 15% each step
+                                height *= 0.85;
+                                elem.width = width;
+                                elem.height = height;
+                                ctx.clearRect(0, 0, width, height);
+                                ctx.drawImage(img, 0, 0, width, height);
+                                dataUrl = elem.toDataURL(file.type, quality);
+                            }
+                            
+                            resolve(dataUrl);
                         };
                         img.onerror = reject;
                     };
@@ -455,7 +471,8 @@
                     previewArea.innerHTML = `<img src="${pendingFrameBase64}" class="h-32 mx-auto object-contain border rounded-lg bg-slate-100 shadow-sm">
                                              <p class="text-sm font-bold text-green-600 mt-2">Frame Loaded!</p>`;
                 } catch(err) {
-                    alert("Error processing image. Try a smaller file.");
+                    console.error(err);
+                    alert("Error processing image. Please try a different file.");
                 } finally {
                     showLoading(false);
                 }
@@ -464,13 +481,28 @@
 
         // 3. Publish Campaign
         document.getElementById('btn-publish').addEventListener('click', async () => {
-            if (!isFirebaseActive) { alert("Cannot publish: Firebase configuration is missing."); return; }
-            if (!currentUser) { alert("You are not signed in. Check previous errors or refresh."); return; }
+            if (!isFirebaseActive) { 
+                alert("Cannot publish: Firebase configuration is missing."); 
+                return; 
+            }
+            
+            // Auto-login retry if needed
+            if (!currentUser) {
+                try {
+                    await signInAnonymously(auth);
+                } catch(e) {
+                    alert("Authentication failed. Please refresh the page.");
+                    return;
+                }
+            }
             
             const title = document.getElementById('campaign-title').value;
             const customSlug = document.getElementById('campaign-slug').value.trim();
 
-            if (!title || !pendingFrameBase64) { alert("Please add a title and a frame."); return; }
+            if (!title || !pendingFrameBase64) { 
+                alert("Please add a title and a frame."); 
+                return; 
+            }
 
             showLoading(true);
 
@@ -482,6 +514,12 @@
                     createdAt: new Date().toISOString(),
                     usageCount: 0
                 };
+
+                // Final safety check for size
+                const jsonSize = new Blob([JSON.stringify(campaignData)]).size;
+                if (jsonSize > 1040000) { // ~1MB
+                    throw new Error("FrameTooBig");
+                }
 
                 let docRef;
 
@@ -505,11 +543,11 @@
                 updateSocialLinks(shareUrl, title);
                 router.navigateTo('success');
             } catch (e) {
-                console.error(e);
+                console.error("Publish Error:", e);
                 if(e.message === "InvalidSlug") alert("Custom Link can only use letters, numbers, and dashes.");
-                else if(e.message === "SlugTaken") alert("That Custom Link is already taken.");
-                else if(e.code === 'permission-denied') alert("Permission Error: Check your Firestore Database Rules. Ensure they are set to 'test mode' or allow writes to 'artifacts'.");
-                else if(e.code === 'resource-exhausted') alert("Image too large. Please try a smaller frame.");
+                else if(e.message === "SlugTaken") alert("That Custom Link is already taken. Please choose another.");
+                else if(e.message === "FrameTooBig") alert("The frame image is still too complex. Please try a simpler PNG.");
+                else if(e.code === 'permission-denied') alert("Permission Error: Your database is blocking writes. Go to Firebase Console > Firestore > Rules, and ensure 'allow write: if true;' is set for testing.");
                 else alert("Failed to create campaign: " + e.message);
             } finally {
                 showLoading(false);
